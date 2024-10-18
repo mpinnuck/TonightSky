@@ -1,0 +1,17 @@
+{
+    "latitude": "-33.713611",
+    "longitude": "151.090278",
+    "date": "2024-10-17",
+    "local_time": "00:00",
+    "timezone": "Australia/Sydney",
+    "filter_expression": "altitude > 40 and transit time < 02",
+    "catalogs": {
+        "Messier": true,
+        "NGC": true,
+        "IC": false,
+        "Caldwell": false,
+        "Abell": false,
+        "Sharpless": false
+    },
+    "csv_file_path": "/Users/markpinnuck/Dev/Python/TonightSky/celestial_catalog.csv"
+}

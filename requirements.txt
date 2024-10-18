@@ -1,0 +1,17 @@
+altgraph==0.17.4
+astropy==6.0.1
+astropy-iers-data==0.2024.10.14.0.32.55
+cffi==1.17.1
+h3==3.7.7
+importlib_metadata==8.5.0
+macholib==1.16.3
+numpy==1.26.4
+packaging==24.1
+pycparser==2.22
+pyerfa==2.0.1.4
+pyinstaller==6.11.0
+pyinstaller-hooks-contrib==2024.9
+pytz==2024.2
+PyYAML==6.0.2
+timezonefinder==6.5.3
+zipp==3.20.2
