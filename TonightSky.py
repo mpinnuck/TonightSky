@@ -37,8 +37,8 @@ def load_settings():
         "date": datetime.now().strftime("%Y-%m-%d"),
         "local_time": "22:00", 
         "timezone": "Australia/Sydney",
-        "filter_expression": "altitude > 30 AND catalog = 'Messier'",
-        "catalogs": {"Messier": False, "NGC": False, "IC": False, "Caldwell": False, "Abell": False, "Sharpless": False}
+        "filter_expression": "altitude > 30 AND transit time < 02",
+        "catalogs": {"Messier": True, "NGC": True, "IC": False, "Caldwell": False, "Abell": False, "Sharpless": False}
     }
 
 def save_settings(settings):
@@ -126,7 +126,7 @@ def format_transit_time(transit_time_minutes):
     # Return formatted string as HH:MM:SS always
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
-
+# Function to calculate transit time and AltAz using astropy
 def calculate_transit_and_alt_az(ra_deg, dec_deg, latitude, longitude, local_time):
     # Create astropy Time object in UTC
     astropy_time = Time(local_time.astimezone(pytz.utc))
@@ -168,39 +168,6 @@ def calculate_transit_and_alt_az(ra_deg, dec_deg, latitude, longitude, local_tim
     transit_time_minutes = abs(time_diff_hours * 60)  # Use absolute value for relative time
 
     return transit_time_minutes, before_after, altitude, azimuth
-
-# Function to calculate transit time and AltAz using astropy
-def calculate_transit_and_alt_azX(ra_deg, dec_deg, latitude, longitude, local_time):
-    # Create astropy Time object
-    astropy_time = Time(local_time.astimezone(pytz.utc))
-    
-    # Define the observer's location using astropy's EarthLocation
-    location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg, height=0 * u.m)
-    
-    # Create a SkyCoord object for the celestial object (RA/Dec)
-    target = SkyCoord(ra=ra_deg * u.deg, dec=dec_deg * u.deg)
-    
-    # Create an AltAz object for the observer's location and time
-    altaz = AltAz(obstime=astropy_time, location=location)
-    
-    # Calculate the Altitude and Azimuth of the target
-    altaz_coord = target.transform_to(altaz)
-    altitude = altaz_coord.alt.deg
-    azimuth = altaz_coord.az.deg
-
-    # Calculate Local Sidereal Time (LST)
-    lst = astropy_time.sidereal_time('mean', longitude * u.deg).hour
-
-    # Transit occurs when the LST matches the RA of the object
-    ra_hours = ra_deg / 15.0
-    time_diff_hours = ra_hours - lst
-    if time_diff_hours > 12:
-        time_diff_hours -= 24
-    elif time_diff_hours < -12:
-        time_diff_hours += 24
-    transit_time_minutes = time_diff_hours * 60
-
-    return transit_time_minutes, altitude, azimuth
 
 def parse_query_conditions(query, valid_columns):
     """Parse the query and validate column names against valid columns."""
@@ -276,7 +243,7 @@ class TonightSkyApp:
         # Set initial window size
         window_width = 1300
         self.root = root
-        self.root.title("TonightSky Object Transit Calculator (v1.0)")
+        self.root.title("TonightSky Object Transit Calculator (v1.1)")
         
         # Load saved settings (including filters)
         self.settings = load_settings()
@@ -394,7 +361,7 @@ class TonightSkyApp:
         tk.Label(root, text="Enter Filter ('altitude > 30'):").grid(row=8, column=0, sticky="w", pady=(5, 0))
         self.query_text = tk.Text(root, height=4, width=100)
         self.query_text.grid(row=9, column=0, columnspan=7, sticky="ew", pady=(5, 5))
-        self.query_text.insert(tk.END, self.settings.get("filter_expression", "altitude > 30"))
+        self.query_text.insert(tk.END, self.settings.get("filter_expression", "altitude > 30 and transit time < 02"))
         self.root.grid_rowconfigure(9, weight=0)  # Ensure edit control does not expand vertically
         self.query_text.bind("<Control-Return>", lambda event: self.list_objects())
 
@@ -482,7 +449,7 @@ class TonightSkyApp:
         self.list_button.config(text="List Objects", state=tk.NORMAL, command=self.toggle_search)
         self.update_status("Ready")  # Reset the status label to indicate readiness
 
-################################################################
+    ################################################################
     # Load objects and calculate AltAz and transit time
     def list_objects(self):
         """Handle the listing of celestial objects based on user input and query conditions."""
@@ -617,8 +584,8 @@ class TonightSkyApp:
                 # Step 2: Build the complete row object (from both CSV and computed values)
                 current_row = {
                     'Name': row['Name'],
-                    'RA': self.degrees_to_ra(float(row['RA'])),  # Convert RA to hh:mm:ss format
-                    'Dec': self.format_dec(dec),                 # Convert Dec to a formatted string
+                    'RA': degrees_to_ra(float(row['RA'])),  # Convert RA to hh:mm:ss format
+                    'Dec': format_dec(dec),                 # Convert Dec to a formatted string
                     'Transit Time': format_transit_time(transit_time_minutes),  # Store the transit time
                    'Before/After': before_after,  # Before/After column
                     'Altitude': f"{altitude:.2f}°",  # Store computed Altitude
@@ -656,25 +623,6 @@ class TonightSkyApp:
         # Enable the list button again and update status
         self.list_button.config(state=tk.NORMAL)
         self.update_status("Search complete")
-
-    #########################
-    # Helper function for formatting
-    def format_time_difference(self, time_in_minutes):
-        sign = "After" if time_in_minutes >= 0 else "Before"
-        time_in_minutes = abs(time_in_minutes)
-        hours = int(time_in_minutes // 60)
-        minutes = int(time_in_minutes % 60)
-        return f"{sign} {hours:02d}:{minutes:02d}"
-
-    def degrees_to_ra(self, degrees):
-        hours = int(degrees // 15)
-        minutes = int((degrees % 15) * 4)
-        seconds = ((degrees % 15) * 4 - minutes) * 60
-        return f"{hours:02d}:{minutes:02d}:{int(seconds):02d}"
-
-    def format_dec(self, dec):
-        return f"{dec:.2f}°"
-
 
     def save_settings(self):
         """Save settings to tonightsky.json."""
@@ -740,6 +688,9 @@ class TonightSkyApp:
     def bind_treeview_selection(self):
         """Bind the selection event of the Treeview to copy content to clipboard."""
         self.tree.bind("<<TreeviewSelect>>", lambda event: self.copy_to_clipboard())
+        # Bind the double-click event to open the Astrobin page
+        self.tree.bind("<Double-1>", lambda event: self.open_astrobin_page())
+
 
     def create_context_menu(self):
         """Create the right-click context menu for the Treeview."""

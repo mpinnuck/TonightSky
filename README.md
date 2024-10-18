@@ -26,7 +26,12 @@ Inspired by the Seti-Astro "WhatsInTonightSky" app, **TonightSky** uses a custom
   pip install -r requirements.txt
 
 3. Run the application:
-   python TonightSky.py or build app with pyinstaller -D --windowed --clean --icon=TonightSky.icns --add-data "celestial_catalog.csv:." TonightSky.py
+   python TonightSky.py or 
+   build app with 
+      pyinstaller -D --windowed --clean --icon=TonightSky.icns --add-data "celestial_catalog.csv:." TonightSky.py
+   or pyinstaller -F --windowed --clean --icon=TonightSky.icns --add-data "celestial_catalog.csv:." TonightSky.py
+   -D creates a folder with all required items, loads instantly
+   -F creates a single zipped file, when executed unzips to a temporary folder then executs this takes about 10 secs on an M2
    
 ## File Structure
 .  \
@@ -42,5 +47,10 @@ Inspired by the Seti-Astro "WhatsInTonightSky" app, **TonightSky** uses a custom
 
 ## Usage
 1.	Custom Location: Set your location manually by inputting your latitude and longitude.
-2.	Filter Objects: Use the SQL-like filter option to narrow down objects based on criteria such as magnitude, size, or catalog entry.
-3.	Calculate Transit Times: The app calculates transit times relative to the meridian at your location and the current local time you provide.
+2. Enter a time of night as a base for relative transit times before or after that time
+3.	Filter Objects: Use the SQL-like filter option to narrow down objects based on criteria such as altitude, magnitude, size, or transit time.
+4.	Calculate Transit Times: The app calculates transit times relative to the meridian at your location and the current local time you provide.
+5. Double click on a row to display the astrobin page for the object
+6. Right click to copy a row to the clip board
+7. The app saves settings in TonightSky.json on windows in APPDATA, on OSX in /Users/user/Library/Application Support/TonightSky/tonightsky.json
+
