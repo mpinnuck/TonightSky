@@ -126,6 +126,12 @@ def format_transit_time(transit_time_minutes):
     # Return formatted string as HH:MM:SS always
     return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
+# Calculate Local Sidereal Time (LST)
+def calculate_lst(longitude, utc_time):
+    astropy_time = Time(utc_time)
+    lst = astropy_time.sidereal_time('mean', longitude * u.deg).hour
+    return lst
+
 # Function to calculate transit time and AltAz using astropy
 def calculate_transit_and_alt_az(ra_deg, dec_deg, latitude, longitude, local_time):
     # Create astropy Time object in UTC
@@ -240,17 +246,15 @@ class TonightSkyApp:
         # Load saved settings (including filters)
         self.settings = load_settings()
 
-        # Set initial window size
-        window_width = 1300
         self.root = root
-        self.root.title("TonightSky Object Transit Calculator (v1.1)")
+        self.root.title("TonightSky Object Transit Calculator (v1.2)")
         
         # Load saved settings (including filters)
         self.settings = load_settings()
 
         # Set initial window size
         window_width = 1300
-        window_height = 600
+        window_height = 1000
         screen_width = root.winfo_screenwidth()
         screen_height = root.winfo_screenheight()
         x_cordinate = int((screen_width / 2) - (window_width / 2))
@@ -550,7 +554,7 @@ class TonightSkyApp:
 
             # Convert local time to UTC and calculate Local Sidereal Time (LST)
             utc_time = local_time.astimezone(pytz.utc)
-            lst = self.calculate_lst(longitude, utc_time)
+            lst = calculate_lst(longitude, utc_time)
 
             for row in reader:
                 # Check for abort signal
@@ -642,12 +646,6 @@ class TonightSkyApp:
         """Update Sidereal Time based on the current input values."""
         self.initialize_sidereal_time()
         
-    # Calculate Local Sidereal Time (LST)
-    def calculate_lst(self, longitude, utc_time):
-        astropy_time = Time(utc_time)
-        lst = astropy_time.sidereal_time('mean', longitude * u.deg).hour
-        return lst
-
     def initialize_sidereal_time(self):
         """Initialize Sidereal Time based on the current input values."""
         try:
@@ -659,7 +657,7 @@ class TonightSkyApp:
             timezone = pytz.timezone(timezone_str)
             local_time = timezone.localize(local_time)
             utc_time = local_time.astimezone(pytz.utc)
-            lst_hours = self.calculate_lst(longitude, utc_time)
+            lst_hours = calculate_lst(longitude, utc_time)
             hours = int(lst_hours)
             minutes = int((lst_hours * 60) % 60)
             seconds = int((lst_hours * 3600) % 60)
