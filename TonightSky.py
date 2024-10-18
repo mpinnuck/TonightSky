@@ -276,7 +276,7 @@ class TonightSkyApp:
         # Set initial window size
         window_width = 1300
         self.root = root
-        self.root.title("TonightSky Object Transit Calculator (v1)")
+        self.root.title("TonightSky Object Transit Calculator (v1.0)")
         
         # Load saved settings (including filters)
         self.settings = load_settings()
