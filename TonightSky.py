@@ -204,15 +204,23 @@ def evaluate_conditions(row, conditions):
 
         # Perform type conversions and handle degree symbol if present
         row_value = row_value.strip('°')  # Remove degree symbol if present
-        try:
-            if row_value.replace('.', '', 1).isdigit():  # Check if row_value is numeric
-                row_value = float(row_value)
-                value = float(value)
-            else:
-                row_value = str(row_value).lower()  # Convert to string for string comparisons
-                value = value.lower()
-        except ValueError:
-            raise ValueError(f"Type mismatch or conversion error with value {row_value} and condition {value}")
+
+        # Attempt to convert both row_value and value to float if they are numeric
+        def is_numeric(value):
+            """Check if a value can be converted to a float."""
+            try:
+                float(value)
+                return True
+            except ValueError:
+                return False
+
+        if is_numeric(row_value) and is_numeric(value):
+            row_value = float(row_value)
+            value = float(value)
+        else:
+            # Convert both values to lowercase strings for string comparisons
+            row_value = str(row_value).lower()
+            value = str(value).lower()
 
         # Perform comparison based on the operator
         if operator == '>' and not row_value > value:
@@ -247,7 +255,7 @@ class TonightSkyApp:
         self.settings = load_settings()
 
         self.root = root
-        self.root.title("TonightSky Object Transit Calculator (v1.2)")
+        self.root.title("TonightSky Object Transit Calculator (v1.3)")
         
         # Load saved settings (including filters)
         self.settings = load_settings()
