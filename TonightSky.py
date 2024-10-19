@@ -247,20 +247,14 @@ def evaluate_conditions(row, conditions):
 class TonightSkyApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TonightSky Object Transit Calculator")
+        self.root.title("TonightSky Object Transit Calculator (v1.4)")
         # Initialize the abort flag
         self.abort_flag = threading.Event()
 
         # Load saved settings (including filters)
         self.settings = load_settings()
 
-        self.root = root
-        self.root.title("TonightSky Object Transit Calculator (v1.3)")
-        
-        # Load saved settings (including filters)
-        self.settings = load_settings()
-
-        # Set initial window size
+         # Set initial window size
         window_width = 1300
         window_height = 1000
         screen_width = root.winfo_screenwidth()
@@ -331,7 +325,7 @@ class TonightSkyApp:
         self.browse_button.grid(row=0, column=4, sticky="w")
 
         # List Objects button
-        self.list_button = tk.Button(root, text="List Objects", command=self.toggle_search)
+        self.list_button = tk.Button(root, text="List Objects", command=self.toggle_search, width=12)
         self.list_button.grid(row=4, column=2, sticky="w")
 
         # Sidereal Time label and value
