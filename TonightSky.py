@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import font as tkFont
 from tkinter import filedialog
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from timezonefinder import TimezoneFinder
 import csv
@@ -173,7 +173,10 @@ def calculate_transit_and_alt_az(ra_deg, dec_deg, latitude, longitude, local_tim
     # Convert the time difference to minutes
     transit_time_minutes = abs(time_diff_hours * 60)  # Use absolute value for relative time
 
-    return transit_time_minutes, before_after, altitude, azimuth
+        # Calculate local transit time using timedelta from current local time
+    local_transit_time = local_time + timedelta(minutes=transit_time_minutes if before_after == "After" else -transit_time_minutes)
+
+    return transit_time_minutes, local_transit_time.strftime("%H:%M:%S"), before_after, altitude, azimuth
 
 def parse_query_conditions(query, valid_columns):
     """Parse the query and validate column names against valid columns."""
@@ -372,7 +375,7 @@ class TonightSkyApp:
         self.query_text.bind("<Control-Return>", lambda event: self.list_objects())
 
         # Treeview for displaying objects
-        columns = ("Name", "RA", "Dec", "Transit Time", "Before/After", "Altitude", "Azimuth", "Alt Name", "Type", "Magnitude", "Info", "Catalog")
+        columns = ("Name", "RA", "Dec", "Transit Time", "Relative TT", "Before/After", "Altitude", "Azimuth", "Alt Name", "Type", "Magnitude", "Info", "Catalog")
         tree_frame = tk.Frame(root)
         tree_frame.grid(row=10, column=0, columnspan=7, sticky="nsew", pady=(5, 5))
         self.tree = ttk.Treeview(tree_frame, columns=columns, show="headings")
@@ -581,7 +584,9 @@ class TonightSkyApp:
                     continue  # Skip rows with invalid RA/Dec values
 
                 # Step 1: Compute values like transit time, altitude, and azimuth
-                transit_time_minutes, before_after, altitude, azimuth = calculate_transit_and_alt_az(ra, dec, latitude, longitude, local_time)
+                #transit_time_minutes, before_after, altitude, azimuth = calculate_transit_and_alt_az(ra, dec, latitude, longitude, local_time)
+                transit_time_minutes, local_transit_time, before_after, altitude, azimuth = calculate_transit_and_alt_az(ra, dec, latitude, longitude, local_time)
+
                 # Skip objects with negative altitude (below horizon)
                 if altitude < 0:
                     continue
@@ -590,18 +595,20 @@ class TonightSkyApp:
                 # Step 2: Build the complete row object (from both CSV and computed values)
                 current_row = {
                     'Name': row['Name'],
-                    'RA': degrees_to_ra(float(row['RA'])),  # Convert RA to hh:mm:ss format
-                    'Dec': format_dec(dec),                 # Convert Dec to a formatted string
-                    'Transit Time': format_transit_time(transit_time_minutes),  # Store the transit time
-                   'Before/After': before_after,  # Before/After column
-                    'Altitude': f"{altitude:.2f}°",  # Store computed Altitude
-                    'Azimuth': f"{azimuth:.2f}°",    # Store computed Azimuth
+                    'RA': degrees_to_ra(float(row['RA'])),
+                    'Dec': format_dec(dec),
+                    'Transit Time': local_transit_time,
+                    'Relative TT': format_transit_time(transit_time_minutes),
+                    'Before/After': before_after,
+                    'Altitude': f"{altitude:.2f}°",
+                    'Azimuth': f"{azimuth:.2f}°",
                     'Alt Name': row['Alt Name'],
                     'Type': row['Type'],
                     'Magnitude': row['Magnitude'],
                     'Info': row['Info'],
                     'Catalog': row['Catalog']
                 }
+
 
                 # Step 3: Evaluate conditions on the fully built row object
                 if evaluate_conditions(current_row, conditions):
@@ -610,7 +617,6 @@ class TonightSkyApp:
 
 
         return objects
-
 
 
     def update_treeview(self, objects):
@@ -622,13 +628,15 @@ class TonightSkyApp:
         # Populate the treeview with the filtered objects
         for obj in objects:
             self.tree.insert("", "end", values=(obj['Name'], obj['RA'], obj['Dec'],
-                                                obj['Transit Time'], obj['Before/After'], 
-                                                obj['Altitude'], obj['Azimuth'], obj['Alt Name'], obj['Type'],
-                                                obj['Magnitude'], obj['Info'], obj['Catalog']))
+                                                obj['Transit Time'], obj['Relative TT'], 
+                                                obj['Before/After'], obj['Altitude'], obj['Azimuth'], 
+                                                obj['Alt Name'], obj['Type'], obj['Magnitude'], 
+                                                obj['Info'], obj['Catalog']))
 
         # Enable the list button again and update status
         self.list_button.config(state=tk.NORMAL)
         self.update_status("Search complete")
+
 
     def save_settings(self):
         """Save settings to tonightsky.json."""
