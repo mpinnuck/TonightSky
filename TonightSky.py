@@ -250,7 +250,7 @@ def evaluate_conditions(row, conditions):
 class TonightSkyApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TonightSky Object Transit Calculator (v1.4)")
+        self.root.title("TonightSky Object Transit Calculator (v1.5)")
         # Initialize the abort flag
         self.abort_flag = threading.Event()
 
