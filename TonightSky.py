@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import font as tkFont
 from tkinter import filedialog
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta, time
 import pytz
 from timezonefinder import TimezoneFinder
 import csv
@@ -14,11 +14,21 @@ import platform
 from astropy.coordinates import EarthLocation, AltAz, SkyCoord
 from astropy.time import Time
 import astropy.units as u
+from astropy.coordinates import get_sun
 import threading
 import urllib.parse
 import webbrowser
 import re
 import shutil
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.collections import LineCollection
+import matplotlib.dates as mdates 
+import numpy as np
+#from scipy.interpolate import CubicSpline
+from astroplan import Observer, FixedTarget
+
 
 # Define files the JSON file is where the sesttings and CSV path will be stored 
 # if not find in app folder
@@ -246,6 +256,152 @@ def evaluate_conditions(row, conditions):
 
     return True  # If all conditions pass, return True
 
+def calculate_sunset_sunrise(latitude, longitude, date, timezone_str):
+    """Calculates the sunset and sunrise times for a given location and date.
+
+    Args:
+        latitude: Latitude in degrees.
+        longitude: Longitude in degrees.
+        date: Date as a datetime.date object.
+        timezone_str: Timezone string (e.g., 'Australia/Sydney').
+
+    Returns:
+        A tuple of datetime objects representing sunset and sunrise times, respectively.
+    """
+
+    # Convert date to a datetime at midnight for Astropy Time
+    date_with_time = datetime.combine(date, time(0, 0))  # Use 'time' from 'datetime'
+
+    time_obj = Time(date_with_time, scale='utc')  # Using a datetime object
+
+    location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg)
+    timezone = pytz.timezone(timezone_str)
+    observer = Observer(location=location, timezone=timezone)
+
+    # Calculate sunset and sunrise times
+    sunset_time = observer.sun_set_time(time_obj, which='nearest').to_datetime(timezone)
+    sunrise_time = observer.sun_rise_time(time_obj, which='next').to_datetime(timezone)
+
+    return sunset_time, sunrise_time
+    
+# Function to calculate astronomical dusk and dawn
+def calculate_astronomical_dusk_dawn(latitude, longitude, date, timezone_str):
+    """Calculates the times for astronomical dusk and dawn on a given date and location.
+
+    Args:
+        latitude: Latitude in degrees.
+        longitude: Longitude in degrees.
+        date: Date as a datetime object.
+        timezone_str: Timezone string (e.g., 'US/Eastern').
+
+    Returns:
+        A tuple of datetime objects representing dusk and dawn times, respectively.
+    """
+
+    location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg)
+    timezone = pytz.timezone(timezone_str)
+
+    # Create an Observer object
+    observer = Observer(location=location, timezone=timezone)
+
+    # Calculate local midnight in UTC
+    date_midnight_utc = Time(datetime.combine(date, datetime.min.time()), scale='utc')
+
+    # Define dusk and dawn altitude
+    dusk_dawn_altitude = -18 * u.deg
+
+    # Use Observer methods to directly calculate dusk and dawn
+    dusk_time = observer.sun_set_time(date_midnight_utc, which='next', horizon=dusk_dawn_altitude).to_datetime(timezone)
+    dawn_time = observer.sun_rise_time(date_midnight_utc, which='next', horizon=dusk_dawn_altitude).to_datetime(timezone)
+
+    return dusk_time, dawn_time
+
+def generate_altitude_data(ra_deg, dec_deg, latitude, longitude, date, timezone_str, dusk_time, dawn_time):
+    """Generate altitude data for a celestial object from half an hour before dusk to half an hour after dawn."""
+    
+    # Observer location and target
+    location = EarthLocation(lat=latitude * u.deg, lon=longitude * u.deg)
+    target = SkyCoord(ra=ra_deg * u.deg, dec=dec_deg * u.deg)
+    
+    # Define start and end times based on dusk and dawn (already localized)
+    start_time = dusk_time - timedelta(minutes=30)
+    end_time = dawn_time + timedelta(minutes=30)
+    
+    # Generate list of times in 10-minute intervals, converting to UTC for astropy handling
+    times = [start_time + timedelta(minutes=10) * i for i in range(int((end_time - start_time).total_seconds() / 600) + 1)]
+    times_utc = [t.astimezone(pytz.UTC) for t in times]  # Convert to UTC
+    astropy_times = Time(times_utc)
+    
+    # Transform the target coordinates to AltAz for each time interval
+    altaz_frame = AltAz(obstime=astropy_times, location=location)
+    altitudes = target.transform_to(altaz_frame).alt.deg
+    
+    # Pair times and altitudes in local time for the final output
+    altitude_data = [(t, alt) for t, alt in zip(times, altitudes)]
+    
+    return altitude_data
+
+def plot_altitude_graph(object_name, altitude_data, transit_time, dusk_time, dawn_time):
+    """Plot the altitude vs time graph with night shading and vertical lines for transit and midnight."""
+    times, altitudes = zip(*altitude_data)
+
+    # Create the figure and axis
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    # Plot altitude data with color coding for day and night
+    for i in range(1, len(times)):
+        start_time, end_time = times[i-1], times[i]
+        start_alt, end_alt = altitudes[i-1], altitudes[i]
+        color = "blue" if start_time < dusk_time or start_time > dawn_time else "white"
+        ax.plot([start_time, end_time], [start_alt, end_alt], color=color)
+
+    # Shade for night time
+    ax.axvspan(times[0], dusk_time, color="lightgrey", alpha=0.5, label="Twilight")
+    ax.axvspan(dawn_time, times[-1], color="lightgrey", alpha=0.5)
+    ax.axvspan(dusk_time, dawn_time, color="black", alpha=0.8, label="Night")
+
+    # Add vertical lines for transit and midnight
+    ax.axvline(x=transit_time, color="red", linestyle="--", linewidth=1, label="Transit")
+    midnight = times[0].replace(day=times[0].day + 1, hour=0, minute=0)
+    ax.axvline(x=midnight, color="yellow", linestyle="--", linewidth=1, label="Midnight")
+
+    # Horizontal lines for altitude reference
+    for y in range(10, 91, 10):
+        line_color = "white" if dusk_time < times[0] < dawn_time else "grey"
+        ax.axhline(y=y, color=line_color, linestyle="--", linewidth=0.5)
+
+    # Format plot
+    ax.set_xlim([times[0], times[-1]])
+    ax.set_ylim(0, 90)
+    ax.set_title(f"{object_name} Altitude vs Time (Transit at {transit_time.strftime('%H:%M')})")
+    ax.set_xlabel("Local Time")
+    ax.set_ylabel("Altitude (degrees)")
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%H:%M", tz=dusk_time.tzinfo))
+    ax.legend(loc="upper left")
+    plt.xticks(rotation=45)
+
+    # Center the plot window on the screen
+    root = tk.Tk()
+    root.withdraw()  # Hide the root Tkinter window
+
+    # Get screen dimensions
+    screen_width = root.winfo_screenwidth()
+    screen_height = root.winfo_screenheight()
+
+    # Define plot window size
+    plot_width = 800
+    plot_height = 400
+
+    # Calculate the position to center the window
+    x = (screen_width - plot_width) // 2
+    y = (screen_height - plot_height) // 2
+
+    # Set the window position
+    fig.canvas.manager.window.wm_geometry(f"{plot_width}x{plot_height}+{x}+{y}")
+
+    plt.show(block=False)
+    root.destroy()  # Destroy the Tkinter root after plotting
+
 # GUI Application Class
 class TonightSkyApp:
     def __init__(self, root):
@@ -396,6 +552,10 @@ class TonightSkyApp:
         # Bind the resize event
         self.bind_treeview_selection()
         self.create_context_menu()
+
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.figure = None
+
 
     def get_csv_path(self):
         """Class method that checks the csv_path_entry and returns the path, or calls external get_csv_path."""
@@ -700,16 +860,18 @@ class TonightSkyApp:
         self.tree.bind("<Double-1>", lambda event: self.open_astrobin_page())
 
 
+    # List context menu
     def create_context_menu(self):
         """Create the right-click context menu for the Treeview."""
         self.context_menu = tk.Menu(self.root, tearoff=0)
+        self.context_menu.add_command(label="Graph", command=self.open_altitude_graph)
         self.context_menu.add_command(label="Copy", command=self.copy_to_clipboard)
-        self.context_menu.add_command(label="Open in AstroBin", command=self.open_astrobin_page)
         if platform.system() == 'Darwin':
             self.tree.bind("<Control-Button-1>", self.show_context_menu)
             self.tree.bind("<Button-2>", self.show_context_menu)
         else:
             self.tree.bind("<Button-3>", self.show_context_menu)
+
 
     def show_context_menu(self, event):
         """Show the context menu on right-click."""
@@ -739,6 +901,60 @@ class TonightSkyApp:
         self.save_settings()
         self.root.destroy()
 
+    # Update open_altitude_graph function
+    def open_altitude_graph(self):
+        """Generate an altitude graph for the selected object."""
+        selected_item = self.tree.selection()
+        if selected_item:
+            item = self.tree.item(selected_item)
+            object_name = item['values'][0]
+            dec = float(item['values'][2].strip('°'))
+            latitude = float(self.lat_entry.get())
+            longitude = float(self.lon_entry.get())
+            timezone_str = self.timezone_combobox.get()
+
+            # Extract hours, minutes, and seconds from the RA string
+            ra_parts = item['values'][1].split(':')
+            ra_hours = float(ra_parts[0])
+            ra_minutes = float(ra_parts[1])
+            ra_seconds = float(ra_parts[2]) if len(ra_parts) > 2 else 0.0
+
+            # Convert RA to degrees, including minutes and seconds
+            ra = (ra_hours + ra_minutes / 60 + ra_seconds / 3600) * 15
+
+            # Extract and parse the transit time (already in local time)
+            transit_time_str = item['values'][3]
+            try:
+                transit_time = datetime.strptime(transit_time_str, "%H:%M:%S")
+            except ValueError:
+                transit_time = datetime.strptime(transit_time_str, "%H:%M")
+
+            # Use the date from the date entry control
+            date_str = self.date_entry.get()
+            selected_date = datetime.strptime(date_str, "%Y-%m-%d")
+
+            # Adjust date for transit time if necessary
+            day = selected_date.day + 1 if transit_time.hour < 12 else selected_date.day
+            timezone = pytz.timezone(timezone_str)
+            transit_time = timezone.localize(
+                transit_time.replace(year=selected_date.year, month=selected_date.month, day=day)
+            )
+
+            # Calculate sunset and sunrise for the selected date
+            sunset, sunrise = calculate_sunset_sunrise(latitude, longitude, selected_date.date(), timezone_str)
+            # Generate altitude data using dusk and dawn times
+            altitude_data = generate_altitude_data(ra, dec, latitude, longitude, selected_date.date(), timezone_str, sunset, sunrise)
+
+            # Calculate dusk and dawn times for the selected date
+            dusk_time, dawn_time = calculate_astronomical_dusk_dawn(latitude, longitude, selected_date.date(), timezone_str)
+
+            # Call the plot function
+            plot_altitude_graph(object_name, altitude_data, transit_time, dusk_time, dawn_time)
+
+    def on_closing(self):
+        """Close the main app and any open plot windows."""
+        plt.close('all')  # Close all matplotlib plot windows
+        self.root.destroy()  # Close the Tkinter window
 
 # Main entry point
 if __name__ == "__main__":
