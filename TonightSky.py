@@ -406,7 +406,7 @@ def plot_altitude_graph(object_name, altitude_data, transit_time, dusk_time, daw
 class TonightSkyApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("TonightSky Object Transit Calculator (v1.5)")
+        self.root.title("TonightSky Object Transit Calculator (v2.0)")
         # Initialize the abort flag
         self.abort_flag = threading.Event()
 
